@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etch A Sketch — Question Editor</title>
+<style>
+  :root{
+    --etch-red: #d6402c;
+    --etch-red-dark: #a92e1f;
+    --alu: #c7cbce;
+    --ink: #2e3033;
+    --void: #17181a;
+    --void-2: #202226;
+    --void-3: #2a2c30;
+    --success: #3f8f5f;
+    --border: #383b3f;
+    --text: #eceae5;
+    --text-dim: #9a9d9f;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; background:var(--void); color:var(--text);
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  .wrap{ max-width: 760px; margin: 0 auto; padding: 24px 18px 80px; }
+
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:10px;
+    margin-bottom:20px;
+    padding-bottom:16px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1{
+    font-size:19px; margin:0; letter-spacing:0.5px;
+  }
+  h1 span{ color: var(--etch-red); }
+  .sub{ font-size:12px; color:var(--text-dim); margin-top:3px; }
+
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; }
+  button{
+    font-family:inherit; cursor:pointer; border:none; border-radius:7px;
+    padding:9px 14px; font-size:13px; font-weight:600;
+  }
+  .btn-ghost{ background:var(--void-3); color:var(--text); border:1px solid var(--border); }
+  .btn-ghost:hover{ background:#33363a; }
+  .btn-primary{ background:var(--etch-red); color:#fff; }
+  .btn-primary:hover{ background:var(--etch-red-dark); }
+  .btn-small{ padding:6px 10px; font-size:12px; }
+  .btn-danger{ background:transparent; color:#e06a5a; border:1px solid #5a332c; }
+  .btn-danger:hover{ background:#3a201c; }
+  .btn-icon{ background:var(--void-3); color:var(--text-dim); border:1px solid var(--border); width:30px; height:30px; padding:0; border-radius:6px; }
+  .btn-icon:hover{ color:var(--text); }
+  .btn-icon:disabled{ opacity:0.3; cursor:default; }
+
+  #status{
+    font-size:12px; color:var(--text-dim); margin-bottom:16px; min-height:16px;
+  }
+  #status.dirty{ color: #d9a441; }
+  #status.saved{ color: var(--success); }
+
+  .card{
+    background:var(--void-2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px 16px 18px;
+    margin-bottom:14px;
+  }
+  .card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .card-head .qnum{
+    font-weight:800; font-size:14px; letter-spacing:0.5px;
+    color: var(--etch-red);
+  }
+  .card-actions{ display:flex; gap:6px; }
+
+  label{
+    display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.8px;
+    color:var(--text-dim); margin-bottom:5px; margin-top:12px;
+  }
+  label:first-of-type{ margin-top:0; }
+
+  input[type="text"]{
+    width:100%; background:var(--void); border:1px solid var(--border);
+    color:var(--text); border-radius:7px; padding:9px 11px; font-size:14px;
+    font-family:inherit;
+  }
+  input[type="text"]:focus{ outline:none; border-color:var(--etch-red); }
+
+  .video-row{ display:flex; gap:8px; align-items:center; }
+  .video-row input[type="text"]{ flex:1; }
+  .file-hidden{ display:none; }
+
+  .answers-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:6px;
+  }
+  .answer-row{
+    display:flex; align-items:center; gap:8px;
+    background:var(--void); border:1px solid var(--border); border-radius:7px;
+    padding:6px 10px;
+  }
+  .answer-row.is-correct{ border-color: var(--success); }
+  .answer-row input[type="text"]{
+    border:none; background:transparent; padding:5px 0; flex:1;
+  }
+  .answer-row input[type="radio"]{ accent-color: var(--success); width:16px; height:16px; flex-shrink:0; }
+  .answer-row .letter{
+    font-size:11px; font-weight:800; color:var(--text-dim); width:14px;
+  }
+
+  .video-note{ font-size:11px; color:var(--text-dim); margin-top:6px; }
+  .video-preview{
+    margin-top:8px; max-width:220px; border-radius:6px; display:none;
+    border:1px solid var(--border);
+  }
+
+  .add-row{ display:flex; justify-content:center; margin-top:6px; }
+  .add-btn{
+    background:var(--void-2); border:1px dashed var(--border); color:var(--text-dim);
+    padding:14px; border-radius:12px; width:100%; font-size:14px; font-weight:700;
+  }
+  .add-btn:hover{ color:var(--text); border-color:var(--etch-red); }
+
+  .empty{
+    text-align:center; color:var(--text-dim); font-size:13px;
+    padding:40px 0; border:1px dashed var(--border); border-radius:12px;
+  }
+
+  .compat-note{
+    font-size:11px; color:var(--text-dim); margin-top:14px; line-height:1.5;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Question <span>Editor</span></h1>
+      <div class="sub">Builds <code>questions.js</code> for the Etch A Sketch gameplay test</div>
+    </div>
+    <div class="toolbar">
+      <button class="btn-ghost" id="openBtn">Open questions.js</button>
+      <button class="btn-ghost" id="newBtn">New</button>
+      <button class="btn-primary" id="saveBtn">Save</button>
+    </div>
+  </header>
+
+  <div id="status"></div>
+
+  <div id="list"></div>
+
+  <div class="add-row">
+    <button class="add-btn" id="addBtn">+ Add question</button>
+  </div>
+
+  <div class="compat-note" id="compatNote"></div>
+
+  <input type="file" id="fileOpenInput" class="file-hidden" accept=".js">
+</div>
+
+<script>
+(function(){
+  const els = {
+    list: document.getElementById('list'),
+    status: document.getElementById('status'),
+    openBtn: document.getElementById('openBtn'),
+    newBtn: document.getElementById('newBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    addBtn: document.getElementById('addBtn'),
+    fileOpenInput: document.getElementById('fileOpenInput'),
+    compatNote: document.getElementById('compatNote'),
+  };
+
+  const supportsFS = 'showOpenFilePicker' in window;
+  let fileHandle = null;   // used when File System Access API is available
+  let questions = [];
+  let dirty = false;
+
+  els.compatNote.textContent = supportsFS
+    ? 'Save writes straight back to questions.js on disk.'
+    : "Your browser can't save files directly — Save will download a questions.js file for you to drop into the project folder, replacing the old one.";
+
+  function uid(){ return Math.random().toString(36).slice(2,9); }
+
+  function newQuestion(){
+    return { _id: uid(), video: '', answers: ['', '', '', ''], correct: 0 };
+  }
+
+  function setDirty(v){
+    dirty = v;
+    els.status.className = v ? 'dirty' : 'saved';
+    els.status.textContent = v ? 'Unsaved changes' : (els.status.dataset.savedMsg || '');
+  }
+
+  function markSaved(msg){
+    dirty = false;
+    els.status.className = 'saved';
+    els.status.textContent = msg;
+    els.status.dataset.savedMsg = msg;
+  }
+
+  // ---------- rendering ----------
+  function render(){
+    els.list.innerHTML = '';
+    if (questions.length === 0){
+      els.list.innerHTML = '<div class="empty">No questions yet — click "Add question" to start.</div>';
+      return;
+    }
+    questions.forEach((q, i) => els.list.appendChild(renderCard(q, i)));
+  }
+
+  function renderCard(q, index){
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const head = document.createElement('div');
+    head.className = 'card-head';
+    head.innerHTML = `<div class="qnum">Question ${index + 1}</div>`;
+
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+
+    const upBtn = mkIconBtn('↑', () => moveQuestion(index, -1));
+    upBtn.disabled = index === 0;
+    const downBtn = mkIconBtn('↓', () => moveQuestion(index, 1));
+    downBtn.disabled = index === questions.length - 1;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-danger btn-small';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => {
+      if (confirm(`Delete question ${index + 1}?`)){
+        questions.splice(index, 1);
+        setDirty(true);
+        render();
+      }
+    });
+
+    actions.append(upBtn, downBtn, delBtn);
+    head.appendChild(actions);
+    card.appendChild(head);
+
+    // video field
+    const videoLabel = document.createElement('label');
+    videoLabel.textContent = 'Video file';
+    card.appendChild(videoLabel);
+
+    const videoRow = document.createElement('div');
+    videoRow.className = 'video-row';
+
+    const videoInput = document.createElement('input');
+    videoInput.type = 'text';
+    videoInput.placeholder = 'videos/q1.mp4';
+    videoInput.value = q.video;
+    videoInput.addEventListener('input', () => {
+      q.video = videoInput.value;
+      setDirty(true);
+    });
+
+    const browseBtn = document.createElement('button');
+    browseBtn.className = 'btn-ghost btn-small';
+    browseBtn.textContent = 'Choose file…';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'video/*';
+    fileInput.className = 'file-hidden';
+    browseBtn.addEventListener('click', () => fileInput.click());
+
+    const preview = document.createElement('video');
+    preview.className = 'video-preview';
+    preview.controls = true;
+
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files[0];
+      if (!f) return;
+      q.video = 'videos/' + f.name;
+      videoInput.value = q.video;
+      preview.src = URL.createObjectURL(f);
+      preview.style.display = 'block';
+      setDirty(true);
+    });
+
+    videoRow.append(videoInput, browseBtn);
+    card.appendChild(videoRow);
+    card.appendChild(fileInput);
+
+    const note = document.createElement('div');
+    note.className = 'video-note';
+    note.textContent = 'Pick a file just to grab its name — copy the actual clip into your videos/ folder too.';
+    card.appendChild(note);
+    card.appendChild(preview);
+
+    // answers
+    const ansLabel = document.createElement('label');
+    ansLabel.textContent = 'Answers — mark the correct one';
+    card.appendChild(ansLabel);
+
+    const grid = document.createElement('div');
+    grid.className = 'answers-grid';
+    const letters = ['A','B','C','D'];
+
+    q.answers.forEach((text, ai) => {
+      const row = document.createElement('div');
+      row.className = 'answer-row' + (q.correct === ai ? ' is-correct' : '');
+
+      const letter = document.createElement('div');
+      letter.className = 'letter';
+      letter.textContent = letters[ai];
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'correct-' + q._id;
+      radio.checked = q.correct === ai;
+      radio.addEventListener('change', () => {
+        q.correct = ai;
+        setDirty(true);
+        render();
+      });
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = `Answer ${letters[ai]}`;
+      input.value = text;
+      input.addEventListener('input', () => {
+        q.answers[ai] = input.value;
+        setDirty(true);
+      });
+
+      row.append(letter, radio, input);
+      grid.appendChild(row);
+    });
+
+    card.appendChild(grid);
+    return card;
+  }
+
+  function mkIconBtn(label, onClick){
+    const b = document.createElement('button');
+    b.className = 'btn-icon';
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function moveQuestion(index, dir){
+    const target = index + dir;
+    if (target < 0 || target >= questions.length) return;
+    const tmp = questions[index];
+    questions[index] = questions[target];
+    questions[target] = tmp;
+    setDirty(true);
+    render();
+  }
+
+  els.addBtn.addEventListener('click', () => {
+    questions.push(newQuestion());
+    setDirty(true);
+    render();
+  });
+
+  els.newBtn.addEventListener('click', () => {
+    if (dirty && !confirm('Discard unsaved changes and start a new file?')) return;
+    questions = [];
+    fileHandle = null;
+    setDirty(false);
+    els.status.textContent = '';
+    render();
+  });
+
+  // ---------- serialize ----------
+  function toSource(){
+    const header = `/*
+  QUESTIONS CONFIG
+  -----------------
+  Generated by editor.html — edit here instead of by hand where possible.
+
+  video     - filename of the clip, must live in the /videos folder
+  answers   - exactly 4 answer strings
+  correct   - index (0-3) of the correct answer in the answers array
+*/
+
+`;
+    const body = questions.map(q => {
+      const answers = q.answers.map(a => JSON.stringify(a)).join(', ');
+      return `  {\n    video: ${JSON.stringify(q.video)},\n    answers: [${answers}],\n    correct: ${q.correct}\n  }`;
+    }).join(',\n');
+    return header + `const QUESTIONS = [\n${body}\n];\n`;
+  }
+
+  // ---------- load ----------
+  function parseSource(text){
+    const sandbox = {};
+    new Function('module', text + '\n;module.exports = QUESTIONS;')(sandbox);
+    const raw = sandbox.exports || [];
+    return raw.map(q => ({
+      _id: uid(),
+      video: q.video || '',
+      answers: (q.answers || ['', '', '', '']).slice(0, 4),
+      correct: typeof q.correct === 'number' ? q.correct : 0
+    }));
+  }
+
+  async function openFile(){
+    if (dirty && !confirm('Discard unsaved changes and open a different file?')) return;
+
+    if (supportsFS){
+      try{
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }]
+        });
+        fileHandle = handle;
+        const file = await handle.getFile();
+        const text = await file.text();
+        questions = parseSource(text);
+        markSaved(`Loaded ${file.name}`);
+        render();
+      } catch(err){
+        if (err.name !== 'AbortError') alert('Could not open that file: ' + err.message);
+      }
+    } else {
+      els.fileOpenInput.click();
+    }
+  }
+
+  els.fileOpenInput.addEventListener('change', async () => {
+    const f = els.fileOpenInput.files[0];
+    if (!f) return;
+    const text = await f.text();
+    try{
+      questions = parseSource(text);
+      markSaved(`Loaded ${f.name}`);
+      render();
+    } catch(err){
+      alert('Could not parse that file: ' + err.message);
+    }
+  });
+
+  els.openBtn.addEventListener('click', openFile);
+
+  // ---------- save ----------
+  async function save(){
+    if (questions.some(q => !q.video)){
+      if (!confirm('One or more questions has no video filename set. Save anyway?')) return;
+    }
+
+    const text = toSource();
+
+    if (supportsFS){
+      try{
+        if (!fileHandle){
+          fileHandle = await window.showSaveFilePicker({
+            suggestedName: 'questions.js',
+            types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }]
+          });
+        }
+        const writable = await fileHandle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        markSaved('Saved to ' + fileHandle.name + ' · ' + new Date().toLocaleTimeString());
+      } catch(err){
+        if (err.name !== 'AbortError') alert('Could not save: ' + err.message);
+      }
+    } else {
+      const blob = new Blob([text], { type: 'text/javascript' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'questions.js';
+      a.click();
+      URL.revokeObjectURL(url);
+      markSaved('Downloaded questions.js · ' + new Date().toLocaleTimeString());
+    }
+  }
+
+  els.saveBtn.addEventListener('click', save);
+
+  // ---------- init ----------
+  render();
+})();
+</script>
+</body>
+</html>

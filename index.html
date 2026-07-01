@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etch A Sketch — Gameplay Test</title>
+<style>
+  :root{
+    --etch-red: #d6402c;
+    --etch-red-dark: #a92e1f;
+    --screen-alu: #c7cbce;
+    --screen-alu-dark: #9aa0a4;
+    --ink: #2e3033;
+    --void: #17181a;
+    --void-2: #202226;
+    --success: #3f8f5f;
+    --success-dim: #2c6644;
+    --paper: #eceae5;
+    --line: #55595c;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; height:100%;
+    background: var(--void);
+    color: var(--paper);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    overflow-x:hidden;
+  }
+
+  .stage{
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: 28px 16px 60px;
+  }
+
+  /* ---------- top HUD ---------- */
+  .hud{
+    width:100%;
+    max-width:560px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:18px;
+    font-family: "Courier New", monospace;
+    letter-spacing: 1px;
+  }
+  .hud-chip{
+    background: var(--void-2);
+    border: 1px solid #34363a;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #b9bcbe;
+  }
+  .hud-chip b{ color: var(--paper); font-size:15px; }
+  .hud-timer{
+    font-size: 22px;
+    color: var(--success);
+    min-width: 64px;
+    text-align:center;
+  }
+
+  /* ---------- etch-a-sketch frame ---------- */
+  .frame-wrap{
+    position:relative;
+    width:100%;
+    max-width:560px;
+  }
+
+  .frame{
+    background: linear-gradient(160deg, var(--etch-red), var(--etch-red-dark));
+    border-radius: 26px;
+    padding: 26px 26px 34px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.15);
+    position: relative;
+  }
+
+  .screen{
+    background: radial-gradient(120% 140% at 30% 20%, var(--screen-alu), var(--screen-alu-dark));
+    border-radius: 6px;
+    aspect-ratio: 16/10;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 3px #7d8184, inset 0 6px 18px rgba(0,0,0,0.35);
+  }
+
+  .screen video{
+    width:100%; height:100%;
+    object-fit: cover;
+    display:block;
+  }
+
+  .screen-fallback{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px;
+    color: var(--ink);
+    font-family: "Courier New", monospace;
+  }
+  .screen-fallback .ring{
+    width:54px; height:54px;
+    border-radius:50%;
+    border: 4px solid rgba(46,48,51,0.25);
+    border-top-color: var(--ink);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .knobs{
+    display:flex;
+    justify-content:space-between;
+    padding: 20px 10px 0;
+  }
+  .knob{
+    width: 46px; height:46px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #3a3a3a, #141414);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 0 0 2px rgba(255,255,255,0.06);
+  }
+
+  .brand{
+    text-align:center;
+    margin-top: 14px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+  }
+
+  /* ---------- answers ---------- */
+  .answers{
+    width:100%;
+    max-width:560px;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .answer-btn{
+    position:relative;
+    background: linear-gradient(160deg, var(--screen-alu), var(--screen-alu-dark));
+    border: none;
+    border-radius: 10px;
+    padding: 18px 14px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    cursor:pointer;
+    text-align:left;
+    box-shadow: inset 0 0 0 2px #7d8184, 0 3px 0 #6c7073;
+    transition: transform .08s ease, box-shadow .08s ease;
+    overflow:hidden;
+    min-height: 64px;
+  }
+  .answer-btn:active{
+    transform: translateY(2px);
+    box-shadow: inset 0 0 0 2px #7d8184, 0 1px 0 #6c7073;
+  }
+  .answer-btn:disabled{ cursor:default; }
+
+  .answer-btn.locked{
+    outline: 2px dashed rgba(46,48,51,0.5);
+    outline-offset: -6px;
+  }
+
+  .answer-btn.reveal-correct{
+    background: linear-gradient(160deg, #6cc294, var(--success));
+    color: #0d2116;
+  }
+  .answer-btn.reveal-wrong{
+    background: linear-gradient(160deg, #e0796a, var(--etch-red-dark));
+    color: #2a0b06;
+  }
+
+  .mark-svg{
+    position:absolute; right:10px; top:50%; transform: translateY(-50%);
+    width: 30px; height: 30px;
+  }
+  .mark-path{
+    fill:none;
+    stroke: var(--ink);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 40;
+    stroke-dashoffset: 40;
+    animation: draw-line .35s ease forwards;
+  }
+  @keyframes draw-line{ to{ stroke-dashoffset: 0; } }
+
+  /* ---------- shake-to-clear transition ---------- */
+  .shake{
+    animation: etch-shake .4s ease;
+  }
+  @keyframes etch-shake{
+    0%,100%{ transform: translate(0,0) rotate(0); }
+    15%{ transform: translate(-6px,2px) rotate(-1deg); }
+    30%{ transform: translate(5px,-3px) rotate(1deg); }
+    45%{ transform: translate(-4px,3px) rotate(-1deg); }
+    60%{ transform: translate(4px,-2px) rotate(1deg); }
+    75%{ transform: translate(-3px,1px) rotate(0); }
+  }
+  .clearing .screen{
+    background: var(--screen-alu) !important;
+    transition: background .15s ease;
+  }
+
+  /* ---------- end screen ---------- */
+  .end-overlay{
+    display:none;
+    width:100%;
+    max-width:560px;
+    margin-top: 24px;
+    background: var(--void-2);
+    border: 1px solid #34363a;
+    border-radius: 14px;
+    padding: 28px 22px;
+    text-align:center;
+  }
+  .end-overlay.show{ display:block; }
+  .end-score{
+    font-family: "Courier New", monospace;
+    font-size: 46px;
+    font-weight:900;
+    color: var(--success);
+    letter-spacing: 2px;
+  }
+  .end-label{
+    text-transform:uppercase;
+    letter-spacing:2px;
+    font-size:12px;
+    color:#9a9d9f;
+    margin-top:6px;
+  }
+  .end-list{
+    margin-top:20px;
+    text-align:left;
+    font-family:"Courier New", monospace;
+    font-size:13px;
+    color:#c7c9ca;
+    border-top: 1px solid #34363a;
+    padding-top: 14px;
+  }
+  .end-row{
+    display:flex; justify-content:space-between;
+    padding: 5px 0;
+  }
+  .end-row .ok{ color: var(--success); }
+  .end-row .no{ color: var(--etch-red); }
+  .restart-btn{
+    margin-top:20px;
+    background: var(--etch-red);
+    border:none;
+    color:white;
+    font-weight:800;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    padding: 12px 22px;
+    border-radius: 8px;
+    cursor:pointer;
+  }
+
+  .next-hint{
+    margin-top: 14px;
+    font-size:12px;
+    color:#8b8e90;
+    text-align:center;
+    min-height: 16px;
+  }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <div class="hud">
+    <div class="hud-chip">Q <b id="qIndex">1</b> / <span id="qTotal">4</span></div>
+    <div class="hud-chip hud-timer" id="timer">0.0s</div>
+    <div class="hud-chip">Score <b id="scoreChip">0</b></div>
+  </div>
+
+  <div class="frame-wrap">
+    <div class="frame" id="frame">
+      <div class="screen" id="screen">
+        <video id="clip" playsinline muted></video>
+        <div class="screen-fallback hidden" id="fallback">
+          <div class="ring"></div>
+          <div>NO CLIP FOUND — TEST TIMER RUNNING</div>
+        </div>
+      </div>
+      <div class="knobs"><div class="knob"></div><div class="knob"></div></div>
+    </div>
+    <div class="brand">Playback96 &nbsp;·&nbsp; Etch A Sketch Gameplay Test</div>
+  </div>
+
+  <div class="answers" id="answers"></div>
+  <div class="next-hint" id="nextHint"></div>
+
+  <div class="end-overlay" id="endOverlay">
+    <div class="end-score" id="endScore">0 / 0</div>
+    <div class="end-label">Correct Answers</div>
+    <div class="end-list" id="endList"></div>
+    <button class="restart-btn" id="restartBtn">Play Again</button>
+  </div>
+
+</div>
+
+<script src="questions.js"></script>
+<script>
+(function(){
+  const FALLBACK_DURATION_MS = 6000; // used when a video file can't be found
+
+  const els = {
+    frame: document.getElementById('frame'),
+    screen: document.getElementById('screen'),
+    clip: document.getElementById('clip'),
+    fallback: document.getElementById('fallback'),
+    answers: document.getElementById('answers'),
+    qIndex: document.getElementById('qIndex'),
+    qTotal: document.getElementById('qTotal'),
+    timer: document.getElementById('timer'),
+    scoreChip: document.getElementById('scoreChip'),
+    nextHint: document.getElementById('nextHint'),
+    endOverlay: document.getElementById('endOverlay'),
+    endScore: document.getElementById('endScore'),
+    endList: document.getElementById('endList'),
+    restartBtn: document.getElementById('restartBtn'),
+  };
+
+  let current = 0;
+  let results = []; // { correct: bool, timeMs: number|null }
+  let answeredThisRound = false;
+  let selectedIndex = null;
+  let startTime = 0;
+  let timerInterval = null;
+  let fallbackTimeout = null;
+  let roundEnded = false;
+
+  els.qTotal.textContent = QUESTIONS.length;
+
+  function fmtTime(ms){
+    return (ms/1000).toFixed(1) + 's';
+  }
+
+  function startTimerDisplay(){
+    startTime = performance.now();
+    els.timer.textContent = '0.0s';
+    timerInterval = setInterval(()=>{
+      els.timer.textContent = fmtTime(performance.now() - startTime);
+    }, 100);
+  }
+
+  function stopTimerDisplay(){
+    clearInterval(timerInterval);
+  }
+
+  function shuffledOrder(n){
+    const arr = Array.from({ length: n }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function renderAnswers(q){
+    els.answers.innerHTML = '';
+    const order = shuffledOrder(q.answers.length);
+    order.forEach((origIndex)=>{
+      const btn = document.createElement('button');
+      btn.className = 'answer-btn';
+      btn.textContent = q.answers[origIndex];
+      btn.dataset.index = origIndex;
+      btn.addEventListener('click', ()=> handleAnswerClick(origIndex, btn));
+      els.answers.appendChild(btn);
+    });
+  }
+
+  function handleAnswerClick(origIndex, btn){
+    if (answeredThisRound || roundEnded) return;
+    answeredThisRound = true;
+    selectedIndex = origIndex;
+    const elapsed = performance.now() - startTime;
+    stopTimerDisplay();
+    els.timer.textContent = fmtTime(elapsed);
+
+    const btns = els.answers.querySelectorAll('.answer-btn');
+    btns.forEach(b => b.disabled = true);
+    btn.classList.add('locked');
+
+    // store provisional time, correctness confirmed when video ends
+    results[current] = { correct: null, timeMs: elapsed };
+    els.nextHint.textContent = 'Locked in — watch to see the result.';
+  }
+
+  function revealResult(){
+    const q = QUESTIONS[current];
+    const btns = Array.from(els.answers.querySelectorAll('.answer-btn'));
+    btns.forEach(b => b.disabled = true);
+
+    const wasAnswered = selectedIndex !== null;
+    const wasCorrect = wasAnswered && selectedIndex === q.correct;
+
+    const correctBtn = btns.find(b => Number(b.dataset.index) === q.correct);
+    correctBtn.classList.add('reveal-correct');
+    addMark(correctBtn, true);
+
+    if (wasAnswered && !wasCorrect){
+      const wrongBtn = btns.find(b => Number(b.dataset.index) === selectedIndex);
+      wrongBtn.classList.add('reveal-wrong');
+      addMark(wrongBtn, false);
+    }
+
+    if (!results[current]){
+      results[current] = { correct: false, timeMs: null }; // no answer given
+    } else {
+      results[current].correct = wasCorrect;
+    }
+
+    const scoreSoFar = results.filter(r => r && r.correct).length;
+    els.scoreChip.textContent = scoreSoFar;
+
+    els.nextHint.textContent = wasAnswered
+      ? (wasCorrect ? 'Correct! Next question loading…' : 'Not quite — next question loading…')
+      : 'No answer given — next question loading…';
+
+    setTimeout(advance, 1600);
+  }
+
+  function addMark(btn, isCheck){
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('class','mark-svg');
+    svg.setAttribute('viewBox','0 0 24 24');
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','mark-path');
+    path.setAttribute('d', isCheck ? 'M4 13 L10 19 L20 6' : 'M5 5 L19 19 M19 5 L5 19');
+    svg.appendChild(path);
+    btn.appendChild(svg);
+  }
+
+  function loadQuestion(i){
+    roundEnded = false;
+    answeredThisRound = false;
+    selectedIndex = null;
+    els.qIndex.textContent = i + 1;
+    els.nextHint.textContent = '';
+    els.fallback.classList.add('hidden');
+    els.clip.classList.remove('hidden');
+
+    const q = QUESTIONS[i];
+    renderAnswers(q);
+
+    els.clip.pause();
+    els.clip.currentTime = 0;
+    els.clip.src = q.video;
+    els.clip.load();
+
+    clearTimeout(fallbackTimeout);
+
+    const onCanPlay = () => {
+      els.clip.removeEventListener('canplay', onCanPlay);
+      els.clip.play().catch(()=>{});
+      startTimerDisplay();
+    };
+    const onError = () => {
+      // no video file present yet — run a placeholder timer so the
+      // click / scoring logic can still be tested end to end
+      els.clip.classList.add('hidden');
+      els.fallback.classList.remove('hidden');
+      startTimerDisplay();
+      fallbackTimeout = setTimeout(()=>{
+        if (!roundEnded) onRoundEnd();
+      }, FALLBACK_DURATION_MS);
+    };
+
+    els.clip.addEventListener('canplay', onCanPlay, { once:true });
+    els.clip.addEventListener('error', onError, { once:true });
+    els.clip.addEventListener('ended', ()=>{ if(!roundEnded) onRoundEnd(); }, { once:true });
+  }
+
+  function onRoundEnd(){
+    roundEnded = true;
+    stopTimerDisplay();
+    revealResult();
+  }
+
+  function advance(){
+    if (current < QUESTIONS.length - 1){
+      els.frame.classList.add('shake');
+      els.screen.parentElement.classList.add('clearing');
+      setTimeout(()=>{
+        els.frame.classList.remove('shake');
+        els.screen.parentElement.classList.remove('clearing');
+        current++;
+        loadQuestion(current);
+      }, 400);
+    } else {
+      showEndScreen();
+    }
+  }
+
+  function showEndScreen(){
+    const correctCount = results.filter(r => r && r.correct).length;
+    const answered = results.filter(r => r && r.timeMs !== null);
+    const avgMs = answered.length
+      ? answered.reduce((s,r)=> s + r.timeMs, 0) / answered.length
+      : null;
+
+    els.endScore.textContent = `${correctCount} / ${QUESTIONS.length}`;
+    els.endList.innerHTML = '';
+
+    results.forEach((r, i)=>{
+      const row = document.createElement('div');
+      row.className = 'end-row';
+      const status = r && r.correct ? '<span class="ok">CORRECT</span>' : '<span class="no">MISSED</span>';
+      const time = r && r.timeMs !== null ? fmtTime(r.timeMs) : '—';
+      row.innerHTML = `<span>Q${i+1}</span><span>${status}</span><span>${time}</span>`;
+      els.endList.appendChild(row);
+    });
+
+    if (avgMs !== null){
+      const avgRow = document.createElement('div');
+      avgRow.className = 'end-row';
+      avgRow.innerHTML = `<span><b>Avg response</b></span><span></span><span><b>${fmtTime(avgMs)}</b></span>`;
+      els.endList.appendChild(avgRow);
+    }
+
+    els.answers.classList.add('hidden');
+    els.nextHint.textContent = '';
+    els.endOverlay.classList.add('show');
+  }
+
+  els.restartBtn.addEventListener('click', ()=>{
+    current = 0;
+    results = [];
+    els.scoreChip.textContent = '0';
+    els.endOverlay.classList.remove('show');
+    els.answers.classList.remove('hidden');
+    loadQuestion(0);
+  });
+
+  loadQuestion(0);
+})();
+</script>
+
+</body>
+</html>

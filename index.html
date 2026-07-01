@@ -110,6 +110,28 @@
   }
   @keyframes spin{ to{ transform: rotate(360deg); } }
 
+  .countdown-overlay{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(23,24,26,0.55);
+    z-index: 5;
+  }
+  .countdown-num{
+    font-family: "Courier New", monospace;
+    font-weight: 900;
+    font-size: 88px;
+    color: var(--paper);
+    text-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  }
+  .countdown-num.pulse{
+    animation: countdown-pulse 0.7s ease-out;
+  }
+  @keyframes countdown-pulse{
+    0%{ transform: scale(0.4); opacity: 0; }
+    30%{ transform: scale(1.08); opacity: 1; }
+    100%{ transform: scale(1); opacity: 1; }
+  }
+
   .knobs{
     display:flex;
     justify-content:space-between;
@@ -162,6 +184,11 @@
     box-shadow: inset 0 0 0 2px #7d8184, 0 1px 0 #6c7073;
   }
   .answer-btn:disabled{ cursor:default; }
+
+  .answer-btn.pending{
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 
   .answer-btn.locked{
     outline: 2px dashed rgba(46,48,51,0.5);
@@ -294,6 +321,9 @@
           <div class="ring"></div>
           <div>NO CLIP FOUND — TEST TIMER RUNNING</div>
         </div>
+        <div class="countdown-overlay hidden" id="countdownOverlay">
+          <div class="countdown-num" id="countdownNum">3</div>
+        </div>
       </div>
       <div class="knobs"><div class="knob"></div><div class="knob"></div></div>
     </div>
@@ -322,6 +352,8 @@
     screen: document.getElementById('screen'),
     clip: document.getElementById('clip'),
     fallback: document.getElementById('fallback'),
+    countdownOverlay: document.getElementById('countdownOverlay'),
+    countdownNum: document.getElementById('countdownNum'),
     answers: document.getElementById('answers'),
     qIndex: document.getElementById('qIndex'),
     qTotal: document.getElementById('qTotal'),
@@ -341,7 +373,9 @@
   let startTime = 0;
   let timerInterval = null;
   let fallbackTimeout = null;
+  let countdownTimeout = null;
   let roundEnded = false;
+  let videoErrored = false;
 
   els.qTotal.textContent = QUESTIONS.length;
 
@@ -375,11 +409,20 @@
     const order = shuffledOrder(q.answers.length);
     order.forEach((origIndex)=>{
       const btn = document.createElement('button');
-      btn.className = 'answer-btn';
+      btn.className = 'answer-btn pending';
+      btn.disabled = true;
       btn.textContent = q.answers[origIndex];
       btn.dataset.index = origIndex;
       btn.addEventListener('click', ()=> handleAnswerClick(origIndex, btn));
       els.answers.appendChild(btn);
+    });
+  }
+
+  function setAnswersLocked(locked){
+    const btns = els.answers.querySelectorAll('.answer-btn');
+    btns.forEach(b => {
+      b.disabled = locked;
+      b.classList.toggle('pending', locked);
     });
   }
 
@@ -449,13 +492,14 @@
     roundEnded = false;
     answeredThisRound = false;
     selectedIndex = null;
+    videoErrored = false;
     els.qIndex.textContent = i + 1;
     els.nextHint.textContent = '';
     els.fallback.classList.add('hidden');
     els.clip.classList.remove('hidden');
 
     const q = QUESTIONS[i];
-    renderAnswers(q);
+    renderAnswers(q); // answers show immediately, but locked until countdown ends
 
     els.clip.pause();
     els.clip.currentTime = 0;
@@ -463,26 +507,64 @@
     els.clip.load();
 
     clearTimeout(fallbackTimeout);
+    clearTimeout(countdownTimeout);
 
-    const onCanPlay = () => {
-      els.clip.removeEventListener('canplay', onCanPlay);
-      els.clip.play().catch(()=>{});
-      startTimerDisplay();
+    // catch a load failure any time it happens (during or after the countdown)
+    els.clip.addEventListener('error', () => { videoErrored = true; }, { once:true });
+
+    runCountdown(() => startRound(q));
+  }
+
+  function runCountdown(onDone){
+    const steps = ['3', '2', '1', 'GO'];
+    let idx = 0;
+    els.countdownOverlay.classList.remove('hidden');
+
+    const showStep = () => {
+      els.countdownNum.textContent = steps[idx];
+      els.countdownNum.classList.remove('pulse');
+      void els.countdownNum.offsetWidth; // restart animation
+      els.countdownNum.classList.add('pulse');
+      const wasGo = steps[idx] === 'GO';
+      idx++;
+      if (idx < steps.length){
+        countdownTimeout = setTimeout(showStep, 700);
+      } else {
+        countdownTimeout = setTimeout(()=>{
+          els.countdownOverlay.classList.add('hidden');
+          onDone();
+        }, wasGo ? 0 : 400);
+      }
     };
-    const onError = () => {
-      // no video file present yet — run a placeholder timer so the
-      // click / scoring logic can still be tested end to end
+    showStep();
+  }
+
+  function startRound(q){
+    setAnswersLocked(false);
+
+    if (videoErrored){
       els.clip.classList.add('hidden');
       els.fallback.classList.remove('hidden');
       startTimerDisplay();
       fallbackTimeout = setTimeout(()=>{
         if (!roundEnded) onRoundEnd();
       }, FALLBACK_DURATION_MS);
-    };
+      return;
+    }
 
-    els.clip.addEventListener('canplay', onCanPlay, { once:true });
-    els.clip.addEventListener('error', onError, { once:true });
+    els.clip.play().catch(()=>{});
+    startTimerDisplay();
+
     els.clip.addEventListener('ended', ()=>{ if(!roundEnded) onRoundEnd(); }, { once:true });
+    els.clip.addEventListener('error', () => {
+      if (roundEnded) return;
+      videoErrored = true;
+      els.clip.classList.add('hidden');
+      els.fallback.classList.remove('hidden');
+      fallbackTimeout = setTimeout(()=>{
+        if (!roundEnded) onRoundEnd();
+      }, FALLBACK_DURATION_MS);
+    }, { once:true });
   }
 
   function onRoundEnd(){
